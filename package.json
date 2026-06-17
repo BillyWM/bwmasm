@@ -1,0 +1,32 @@
+{
+  "name": "bwmasm",
+  "version": "0.1.0",
+  "description": "An NES assembler",
+  "keywords": [
+    "nes",
+    "6502",
+    "asm",
+    "assembly",
+    "asm6f",
+    "nesasm",
+    "cc65"
+  ],
+  "homepage": "https://github.com/BillyWM/bwmasm-private#readme",
+  "bugs": {
+    "url": "https://github.com/BillyWM/bwmasm-private/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BillyWM/bwmasm-private.git"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "William Wenge-Murphy",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "pegjs": "^0.10.0"
+  }
+}
