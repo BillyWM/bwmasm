@@ -7,6 +7,10 @@
     return { type: 'number', raw, base, value: parseInt(raw.slice(base === 16 ? 1 : base === 2 ? 1 : 0).replace(/_/g, ''), base) };
   }
 
+  function makeBuiltinConstant(name, value) {
+    return { type: 'builtinConstant', raw: name, name, value };
+  }
+
   function makeSize(raw) {
     return { type: 'size', raw, unit: 'k', value: parseInt(raw, 10) * 1024 };
   }
@@ -32,7 +36,7 @@
   }
 
   function makeRamPlacement(address) {
-    return { type: 'absolute', address: address.value, raw: address.raw };
+    return { type: 'absolute', address, raw: address.raw };
   }
 
   function makeRamEnd() {
@@ -116,7 +120,7 @@ RamHeader
     }
 
 RamPlacement
-  = ___ AT ___ address:NumberLiteral {
+  = ___ AT ___ address:AddressLiteral {
       return makeRamPlacement(address);
     }
 
@@ -347,9 +351,13 @@ IndirectIndexedYOperand
   = "(" _ parameter:Parameter _ ")" _ "," _ Y { return makeOperand('indy', parameter); }
 
 Parameter
-  = number:NumberLiteral { return number; }
+  = AddressLiteral
   / reference:AnonymousReference { return reference; }
-  / name:Identifier { return makeSymbol(name); }
+  / SymbolReference
+
+AddressLiteral
+  = BuiltinConstant
+  / NumberLiteral
 
 AnonymousReference
   = signs:[+-]+ {
@@ -362,7 +370,8 @@ ArgumentList
     }
 
 Argument
-  = IntrinsicCall
+  = BuiltinConstant
+  / IntrinsicCall
   / StringLiteral
   / SizeLiteral
   / NumberLiteral
@@ -381,6 +390,56 @@ SizeLiteral
 
 SymbolReference
   = name:Identifier { return makeSymbol(name); }
+
+BuiltinConstant
+  = name:PPUCTRL { return makeBuiltinConstant(name, 0x2000); }
+  / name:PPUMASK { return makeBuiltinConstant(name, 0x2001); }
+  / name:PPUSTATUS { return makeBuiltinConstant(name, 0x2002); }
+  / name:OAMADDR { return makeBuiltinConstant(name, 0x2003); }
+  / name:OAMDATA { return makeBuiltinConstant(name, 0x2004); }
+  / name:PPUSCROLL { return makeBuiltinConstant(name, 0x2005); }
+  / name:PPUADDR { return makeBuiltinConstant(name, 0x2006); }
+  / name:PPUDATA { return makeBuiltinConstant(name, 0x2007); }
+  / name:OAMDMA { return makeBuiltinConstant(name, 0x4014); }
+  / name:SQ1_VOL { return makeBuiltinConstant(name, 0x4000); }
+  / name:SQ1_SWEEP { return makeBuiltinConstant(name, 0x4001); }
+  / name:SQ1_LO { return makeBuiltinConstant(name, 0x4002); }
+  / name:SQ1_HI { return makeBuiltinConstant(name, 0x4003); }
+  / name:SQ2_VOL { return makeBuiltinConstant(name, 0x4004); }
+  / name:SQ2_SWEEP { return makeBuiltinConstant(name, 0x4005); }
+  / name:SQ2_LO { return makeBuiltinConstant(name, 0x4006); }
+  / name:SQ2_HI { return makeBuiltinConstant(name, 0x4007); }
+  / name:TRI_LINEAR { return makeBuiltinConstant(name, 0x4008); }
+  / name:TRI_LO { return makeBuiltinConstant(name, 0x400A); }
+  / name:TRI_HI { return makeBuiltinConstant(name, 0x400B); }
+  / name:NOISE_VOL { return makeBuiltinConstant(name, 0x400C); }
+  / name:NOISE_LO { return makeBuiltinConstant(name, 0x400E); }
+  / name:NOISE_HI { return makeBuiltinConstant(name, 0x400F); }
+  / name:DMC_FREQ { return makeBuiltinConstant(name, 0x4010); }
+  / name:DMC_RAW { return makeBuiltinConstant(name, 0x4011); }
+  / name:DMC_START { return makeBuiltinConstant(name, 0x4012); }
+  / name:DMC_LEN { return makeBuiltinConstant(name, 0x4013); }
+  / name:APUSTATUS { return makeBuiltinConstant(name, 0x4015); }
+  / name:APUFRAME { return makeBuiltinConstant(name, 0x4017); }
+  / name:JOY1 { return makeBuiltinConstant(name, 0x4016); }
+  / name:JOY2 { return makeBuiltinConstant(name, 0x4017); }
+  / name:MMC1_CONTROL { return makeBuiltinConstant(name, 0x9FFF); }
+  / name:MMC1_CHR0 { return makeBuiltinConstant(name, 0xBFFF); }
+  / name:MMC1_CHR1 { return makeBuiltinConstant(name, 0xDFFF); }
+  / name:MMC1_PRG { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:UXROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:CNROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:MMC3_BANKSEL { return makeBuiltinConstant(name, 0x9FFE); }
+  / name:MMC3_BANKDATA { return makeBuiltinConstant(name, 0x9FFF); }
+  / name:MMC3_MIRROR { return makeBuiltinConstant(name, 0xBFFE); }
+  / name:MMC3_RAMPROTECT { return makeBuiltinConstant(name, 0xBFFF); }
+  / name:MMC3_IRQLATCH { return makeBuiltinConstant(name, 0xDFFE); }
+  / name:MMC3_IRQRELOAD { return makeBuiltinConstant(name, 0xDFFF); }
+  / name:MMC3_IRQDISABLE { return makeBuiltinConstant(name, 0xFFFE); }
+  / name:MMC3_IRQENABLE { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:AXROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:BNROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
+  / name:GXROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
 
 RAM = ".ram"i { return makeString(); }
 END = ".end"i { return makeString(); }
@@ -407,6 +466,54 @@ X = "X"i { return makeString(); }
 Y = "Y"i { return makeString(); }
 TBL = "tbl"i { return makeString(); }
 AS = "as"i { return makeString(); }
+PPUCTRL = "PPUCTRL"i ![A-Za-z0-9_.] { return makeString(); }
+PPUMASK = "PPUMASK"i ![A-Za-z0-9_.] { return makeString(); }
+PPUSTATUS = "PPUSTATUS"i ![A-Za-z0-9_.] { return makeString(); }
+OAMADDR = "OAMADDR"i ![A-Za-z0-9_.] { return makeString(); }
+OAMDATA = "OAMDATA"i ![A-Za-z0-9_.] { return makeString(); }
+PPUSCROLL = "PPUSCROLL"i ![A-Za-z0-9_.] { return makeString(); }
+PPUADDR = "PPUADDR"i ![A-Za-z0-9_.] { return makeString(); }
+PPUDATA = "PPUDATA"i ![A-Za-z0-9_.] { return makeString(); }
+OAMDMA = "OAMDMA"i ![A-Za-z0-9_.] { return makeString(); }
+SQ1_VOL = "SQ1_VOL"i ![A-Za-z0-9_.] { return makeString(); }
+SQ1_SWEEP = "SQ1_SWEEP"i ![A-Za-z0-9_.] { return makeString(); }
+SQ1_LO = "SQ1_LO"i ![A-Za-z0-9_.] { return makeString(); }
+SQ1_HI = "SQ1_HI"i ![A-Za-z0-9_.] { return makeString(); }
+SQ2_VOL = "SQ2_VOL"i ![A-Za-z0-9_.] { return makeString(); }
+SQ2_SWEEP = "SQ2_SWEEP"i ![A-Za-z0-9_.] { return makeString(); }
+SQ2_LO = "SQ2_LO"i ![A-Za-z0-9_.] { return makeString(); }
+SQ2_HI = "SQ2_HI"i ![A-Za-z0-9_.] { return makeString(); }
+TRI_LINEAR = "TRI_LINEAR"i ![A-Za-z0-9_.] { return makeString(); }
+TRI_LO = "TRI_LO"i ![A-Za-z0-9_.] { return makeString(); }
+TRI_HI = "TRI_HI"i ![A-Za-z0-9_.] { return makeString(); }
+NOISE_VOL = "NOISE_VOL"i ![A-Za-z0-9_.] { return makeString(); }
+NOISE_LO = "NOISE_LO"i ![A-Za-z0-9_.] { return makeString(); }
+NOISE_HI = "NOISE_HI"i ![A-Za-z0-9_.] { return makeString(); }
+DMC_FREQ = "DMC_FREQ"i ![A-Za-z0-9_.] { return makeString(); }
+DMC_RAW = "DMC_RAW"i ![A-Za-z0-9_.] { return makeString(); }
+DMC_START = "DMC_START"i ![A-Za-z0-9_.] { return makeString(); }
+DMC_LEN = "DMC_LEN"i ![A-Za-z0-9_.] { return makeString(); }
+APUSTATUS = "APUSTATUS"i ![A-Za-z0-9_.] { return makeString(); }
+APUFRAME = "APUFRAME"i ![A-Za-z0-9_.] { return makeString(); }
+JOY1 = "JOY1"i ![A-Za-z0-9_.] { return makeString(); }
+JOY2 = "JOY2"i ![A-Za-z0-9_.] { return makeString(); }
+MMC1_CONTROL = "MMC1_CONTROL"i ![A-Za-z0-9_.] { return makeString(); }
+MMC1_CHR0 = "MMC1_CHR0"i ![A-Za-z0-9_.] { return makeString(); }
+MMC1_CHR1 = "MMC1_CHR1"i ![A-Za-z0-9_.] { return makeString(); }
+MMC1_PRG = "MMC1_PRG"i ![A-Za-z0-9_.] { return makeString(); }
+UXROM_BANK = "UXROM_BANK"i ![A-Za-z0-9_.] { return makeString(); }
+CNROM_BANK = "CNROM_BANK"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_BANKSEL = "MMC3_BANKSEL"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_BANKDATA = "MMC3_BANKDATA"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_MIRROR = "MMC3_MIRROR"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_RAMPROTECT = "MMC3_RAMPROTECT"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_IRQLATCH = "MMC3_IRQLATCH"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_IRQRELOAD = "MMC3_IRQRELOAD"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_IRQDISABLE = "MMC3_IRQDISABLE"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3_IRQENABLE = "MMC3_IRQENABLE"i ![A-Za-z0-9_.] { return makeString(); }
+AXROM_BANK = "AXROM_BANK"i ![A-Za-z0-9_.] { return makeString(); }
+BNROM_BANK = "BNROM_BANK"i ![A-Za-z0-9_.] { return makeString(); }
+GXROM_BANK = "GXROM_BANK"i ![A-Za-z0-9_.] { return makeString(); }
 
 Identifier
   = first:[A-Za-z_] rest:[A-Za-z0-9_.]* {
