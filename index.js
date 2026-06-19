@@ -2,7 +2,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { DEFAULT_SYNTAX, parseBwmSyntax } from './lib/parse.js';
 import { assembleProgram } from './lib/assemble.js';
 import { BwmAsmError, createDiagnostic, formatDiagnostic } from './lib/diagnostics.js';
@@ -109,6 +108,6 @@ export function runCli(argv = process.argv.slice(2), streams = {}) {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   process.exitCode = runCli();
 }

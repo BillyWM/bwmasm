@@ -5,6 +5,8 @@
 .nesmapper nrom
 .nesmirroring vertical
 .incchr "horrible-night.chr"
+.include tbl "example.tbl" as MainTable
+.use MainTable
 
 .ram
   .db framesLo
@@ -151,4 +153,4 @@ HexLetter:
   rts
 
 TitleText:
-  .db 2, 23, 13, 1, 19, 13, 0, 20, 31, 45, 46, 0, 18, 15, 13, $ff
+  .text "BWMASM Test ROM"

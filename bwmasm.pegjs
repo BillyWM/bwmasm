@@ -1,156 +1,58 @@
 {
-  function lineInfo() {
-    const start = location().start;
-    return {
-      line: start.line,
-      column: start.column,
-      offset: start.offset,
-    };
-  }
-
   function join(chars) {
     return chars.join('');
   }
 
-  function trimText(chars) {
-    return join(chars).trim();
+  function makeNumber(raw, base) {
+    return { type: 'number', raw, base, value: parseInt(raw.slice(base === 16 ? 1 : base === 2 ? 1 : 0).replace(/_/g, ''), base) };
   }
 
-  function splitArgs(raw) {
-    const args = [];
-    let current = '';
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let i = 0; i < raw.length; i++) {
-      const ch = raw[i];
-
-      if (escaped) {
-        current += ch;
-        escaped = false;
-        continue;
-      }
-
-      if (ch === '\\') {
-        current += ch;
-        escaped = true;
-        continue;
-      }
-
-      if (ch === '"') {
-        current += ch;
-        inString = !inString;
-        continue;
-      }
-
-      if (!inString) {
-        if (ch === '(') {
-          depth++;
-        } else if (ch === ')' && depth > 0) {
-          depth--;
-        } else if (ch === ',' && depth === 0) {
-          args.push(parseArg(current.trim()));
-          current = '';
-          continue;
-        }
-      }
-
-      current += ch;
-    }
-
-    if (current.trim() !== '' || raw.trim().endsWith(',')) {
-      args.push(parseArg(current.trim()));
-    }
-
-    return args;
+  function makeSize(raw) {
+    return { type: 'size', raw, unit: 'k', value: parseInt(raw, 10) * 1024 };
   }
 
-  function parseArg(raw) {
-    if (raw === '') {
-      return { type: 'empty', raw };
-    }
-
-    if (/^"(?:\\.|[^"\\])*"$/.test(raw)) {
-      return {
-        type: 'string',
-        raw,
-        value: raw.slice(1, -1),
-      };
-    }
-
-    if (/^\$[0-9a-fA-F]+$/.test(raw)) {
-      return {
-        type: 'number',
-        raw,
-        base: 16,
-        value: parseInt(raw.slice(1), 16),
-      };
-    }
-
-    if (/^%[01_]+$/.test(raw)) {
-      return {
-        type: 'number',
-        raw,
-        base: 2,
-        value: parseInt(raw.slice(1).replace(/_/g, ''), 2),
-      };
-    }
-
-    if (/^[0-9]+[kK]$/.test(raw)) {
-      return {
-        type: 'size',
-        raw,
-        unit: 'k',
-        value: parseInt(raw.slice(0, -1), 10) * 1024,
-      };
-    }
-
-    if (/^[0-9]+$/.test(raw)) {
-      return {
-        type: 'number',
-        raw,
-        base: 10,
-        value: parseInt(raw, 10),
-      };
-    }
-
-    const intrinsic = raw.match(/^([A-Za-z_][A-Za-z0-9_]*):([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$/);
-    if (intrinsic) {
-      return {
-        type: 'intrinsicCall',
-        raw,
-        namespace: intrinsic[1],
-        name: intrinsic[2],
-        args: splitArgs(intrinsic[3]),
-      };
-    }
-
-    if (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(raw)) {
-      return {
-        type: 'symbol',
-        raw,
-        name: raw,
-      };
-    }
-
-    return {
-      type: 'expression',
-      raw,
-    };
+  function makeSymbol(name) {
+    return { type: 'symbol', raw: name, name };
   }
 
-  function buildDirective(name, rawArgs, meta) {
-    const normalized = name.toLowerCase();
-    const args = splitArgs(rawArgs || '');
+  function makeStringArgument(raw) {
+    return { type: 'string', raw, value: raw.slice(1, -1) };
+  }
 
-    return Object.assign({
-      type: 'directive',
-      name,
-      normalized,
-      args,
-      rawArgs: rawArgs || '',
-    }, meta);
+  function makeDirective(name, args) {
+    return { type: 'directive', name, normalized: name, args };
+  }
+
+  function makeProgram(lines) {
+    return { type: 'program', body: lines.filter(Boolean) };
+  }
+
+  function makeRamHeader(placement) {
+    return { placement: placement || null };
+  }
+
+  function makeRamPlacement(address) {
+    return { type: 'absolute', address: address.value, raw: address.raw };
+  }
+
+  function makeRamEnd() {
+    return { type: 'blockEnd', kind: 'ram' };
+  }
+
+  function makeComment(comment) {
+    return { type: 'comment', comment };
+  }
+
+  function makeLine(label, statement) {
+    return { type: 'line', label, statement };
+  }
+
+  function makeLabel(name) {
+    return { type: 'label', name, anonymous: false };
+  }
+
+  function makeAnonymousLabel(sign) {
+    return { type: 'anonymousLabel', sign, anonymous: true };
   }
 
   function makeString() {
@@ -165,142 +67,108 @@
     return { type: 'operand', addressingMode, parameter };
   }
 
-  function buildInstruction(mnemonic, operand, meta) {
-    return Object.assign({
-      type: 'instruction',
-      mnemonic,
-      operand,
-    }, meta);
+  function makeInstruction(mnemonic, operand) {
+    return { type: 'instruction', mnemonic, operand };
   }
 
-  function parseNumberRaw(raw) {
-    const parsed = parseArg(raw);
-    if (parsed.type !== 'number') {
-      throw new Error('Expected a number.');
-    }
-    return parsed;
+  function makeDeclaration(space, directive, properties) {
+    return Object.assign({ type: 'declaration', space, directive }, properties);
   }
 
-  function buildRamBlock(header, items, end) {
+
+  function makeRamBlock(header, items, end) {
     return Object.assign({
       type: 'block',
       kind: 'ram',
       placement: header.placement,
       items: items.filter(Boolean),
       end,
-    }, header.meta);
+    });
+  }
+
+  function makeAnonymousReference(signs) {
+    const name = join(signs);
+    return { type: 'anonymousReference', name, raw: name };
+  }
+
+  function makeArgumentList(head, tail) {
+    return [head, ...tail.map((entry) => entry[3])];
+  }
+
+  function makeIntrinsicCall(namespace, name, args) {
+    return { type: 'intrinsicCall', namespace, name, args: args || [] };
   }
 }
 
 Program
   = lines:(RamBlock / Line)* _ EndOfInput {
-      return {
-        type: 'program',
-        body: lines.filter(Boolean),
-      };
+      return makeProgram(lines);
     }
 
 RamBlock
   = header:RamHeader items:RamItemLine* end:RamEnd {
-      return buildRamBlock(header, items, end);
+      return makeRamBlock(header, items, end);
     }
 
 RamHeader
-  = meta:Position _ ".ram" placement:RamPlacement? _ Comment? Newline {
-      return { meta, placement: placement || null };
+  = _ RAM placement:RamPlacement? _ Comment? Newline {
+      return makeRamHeader(placement);
     }
 
 RamPlacement
-  = ___ "at" ___ address:NumberLiteral {
-      return {
-        type: 'absolute',
-        address: address.value,
-        raw: address.raw,
-      };
+  = ___ AT ___ address:NumberLiteral {
+      return makeRamPlacement(address);
     }
 
 RamEnd
-  = meta:Position _ ".end" _ Comment? Newline? {
-      return Object.assign({
-        type: 'blockEnd',
-        kind: 'ram',
-      }, meta);
+  = _ END _ Comment? Newline? {
+      return makeRamEnd();
     }
 
 RamItemLine
   = _ Newline {
       return null;
     }
-  / _ Comment Newline? {
-      return null;
+  / _ comment:Comment Newline? {
+      return makeComment(comment);
     }
-  / meta:Position _ item:RamDecl _ Comment? Newline? {
-      return Object.assign(item, meta);
+  / _ item:RamDecl _ Comment? Newline? {
+      return item;
     }
 
 RamDecl
-  = ".db" ___ name:Identifier {
-      return {
-        type: 'ramDecl',
-        directive: 'db',
-        name,
-        width: 1,
-      };
+  = DB ___ name:Identifier {
+      return makeDeclaration('ram', 'db', { name, width: 1 });
     }
-  / ".dw" ___ name:Identifier {
-      return {
-        type: 'ramDecl',
-        directive: 'dw',
-        name,
-        width: 2,
-      };
+  / DW ___ name:Identifier {
+      return makeDeclaration('ram', 'dw', { name, width: 2 });
     }
-  / ".bytes" size:SizeDecl? ___ name:Identifier {
-      return {
-        type: 'ramDecl',
-        directive: 'bytes',
-        name,
-        width: size,
-      };
+  / BYTES size:SizeDecl? ___ name:Identifier {
+      return makeDeclaration('ram', 'bytes', { name, width: size });
     }
 
 SizeDecl
-  = _ "x" _ size:NumberLiteral {
+  = _ X _ size:NumberLiteral {
       return size.value;
     }
 
 NumberLiteral
-  = raw:("$" digits:[0-9a-fA-F]+ { return "$" + join(digits); }
-        / "%" digits:[01_]+ { return "%" + join(digits); }
-        / digits:[0-9]+ { return join(digits); }) {
-      return parseNumberRaw(raw);
-    }
+  = raw:$("$" [0-9a-fA-F]+) { return makeNumber(raw, 16); }
+  / raw:$("%" [01_]+) { return makeNumber(raw, 2); }
+  / raw:$([0-9]+) { return makeNumber(raw, 10); }
 
 Line
   = _ Newline {
       return null;
     }
-  / meta:Position _ comment:Comment Newline? {
-      return Object.assign({ type: 'comment', comment }, meta);
+  / _ comment:Comment Newline? {
+      return makeComment(comment);
     }
-  / meta:Position _ label:Label _ statement:Statement? _ Comment? Newline? {
-      return Object.assign({
-        type: 'line',
-        label,
-        statement,
-      }, meta);
+  / _ label:Label _ statement:Statement? _ Comment? Newline? {
+      return makeLine(label, statement);
     }
-  / meta:Position _ statement:Statement _ Comment? Newline? {
-      return Object.assign({
-        type: 'line',
-        label: null,
-        statement,
-      }, meta);
-    }
-
-Position
-  = &. {
-      return lineInfo();
+  / _ statement:Statement _ Comment? Newline? {
+      return makeLine(null, statement);
     }
 
 Label
@@ -308,61 +176,79 @@ Label
       return anon;
     }
   / name:Identifier ":" {
-      return Object.assign({
-        type: 'label',
-        name,
-        anonymous: false,
-      }, lineInfo());
+      return makeLabel(name);
     }
 
 AnonymousLabel
   = sign:("+" / "-") ":" {
-      return Object.assign({
-        type: 'anonymousLabel',
-        sign,
-        anonymous: true,
-      }, lineInfo());
+      return makeAnonymousLabel(sign);
     }
 
 Statement
-  = Directive
+  = RomDecl
+  / Directive
   / Instruction
 
-Directive
-  = "." name:Identifier raw:DirectiveArgumentText {
-      return buildDirective(name, raw, lineInfo());
+RomDecl
+  = DB ___ args:ArgumentList {
+      return makeDeclaration('rom', 'db', { args });
     }
+  / DW ___ args:ArgumentList {
+      return makeDeclaration('rom', 'dw', { args });
+    }
+  / TEXT ___ text:StringLiteral {
+      return makeDeclaration('rom', 'text', { text });
+    }
+  / ASCII ___ text:StringLiteral {
+      return makeDeclaration('rom', 'ascii', { text });
+    }
+
+Directive
+  = NESPRG ___ args:ArgumentList { return makeDirective('nesprg', args); }
+  / NESCHR ___ args:ArgumentList { return makeDirective('neschr', args); }
+  / NESPRGRAM ___ args:ArgumentList { return makeDirective('nesprgram', args); }
+  / NESMAPPER ___ args:ArgumentList { return makeDirective('nesmapper', args); }
+  / NESMIRRORING ___ args:ArgumentList { return makeDirective('nesmirroring', args); }
+  / BANK ___ args:ArgumentList { return makeDirective('bank', args); }
+  / INCCHR ___ args:ArgumentList { return makeDirective('incchr', args); }
+  / NMI ___ args:ArgumentList { return makeDirective('nmi', args); }
+  / RESET ___ args:ArgumentList { return makeDirective('reset', args); }
+  / IRQ ___ args:ArgumentList { return makeDirective('irq', args); }
+  / INCLUDE ___ TBL ___ file:StringLiteral ___ AS ___ name:Identifier {
+      return makeDirective('includeTable', { file, name });
+    }
+  / USE ___ name:Identifier { return makeDirective('useTable', { name }); }
 
 Instruction
   = mnemonic:ImpliedMnemonic {
-      return buildInstruction(mnemonic, makeOperand('imp', null), lineInfo());
+      return makeInstruction(mnemonic, makeOperand('imp', null));
     }
   / mnemonic:AccumulatorMnemonic ___ operand:AccumulatorOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:ImmediateMnemonic ___ operand:ImmediateOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:RelativeMnemonic ___ operand:DirectOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:IndirectMnemonic ___ operand:IndirectOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:IndexedIndirectXMnemonic ___ operand:IndexedIndirectXOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:IndirectIndexedYMnemonic ___ operand:IndirectIndexedYOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:DirectXMnemonic ___ operand:DirectXOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:DirectYMnemonic ___ operand:DirectYOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
   / mnemonic:DirectMnemonic ___ operand:DirectOperand {
-      return buildInstruction(mnemonic, operand, lineInfo());
+      return makeInstruction(mnemonic, operand);
     }
 
 ADC = "ADC"i { return makeString(); }
@@ -444,40 +330,83 @@ DirectMnemonic
   = mnemonic:(ADC / AND / ASL / BIT / CMP / CPX / CPY / DEC / EOR / INC / JMP / JSR / LDA / LDX / LDY / LSR / ORA / ROL / ROR / SBC / STA / STX / STY) { return makeMnemonic(mnemonic); }
 
 AccumulatorOperand
-  = "A"i { return makeOperand('acc', null); }
+  = A { return makeOperand('acc', null); }
 ImmediateOperand
   = "#" _ parameter:Parameter { return makeOperand('imm', parameter); }
 DirectOperand
   = parameter:Parameter { return makeOperand('direct', parameter); }
 DirectXOperand
-  = parameter:Parameter _ "," _ "X"i { return makeOperand('directX', parameter); }
+  = parameter:Parameter _ "," _ X { return makeOperand('directX', parameter); }
 DirectYOperand
-  = parameter:Parameter _ "," _ "Y"i { return makeOperand('directY', parameter); }
+  = parameter:Parameter _ "," _ Y { return makeOperand('directY', parameter); }
 IndirectOperand
   = "(" _ parameter:Parameter _ ")" { return makeOperand('ind', parameter); }
 IndexedIndirectXOperand
-  = "(" _ parameter:Parameter _ "," _ "X"i _ ")" { return makeOperand('indx', parameter); }
+  = "(" _ parameter:Parameter _ "," _ X _ ")" { return makeOperand('indx', parameter); }
 IndirectIndexedYOperand
-  = "(" _ parameter:Parameter _ ")" _ "," _ "Y"i { return makeOperand('indy', parameter); }
+  = "(" _ parameter:Parameter _ ")" _ "," _ Y { return makeOperand('indy', parameter); }
 
 Parameter
   = number:NumberLiteral { return number; }
   / reference:AnonymousReference { return reference; }
-  / name:Identifier { return parseArg(name); }
+  / name:Identifier { return makeSymbol(name); }
 
 AnonymousReference
   = signs:[+-]+ {
-      const name = join(signs);
-      return { type: 'anonymousReference', name, raw: name };
+      return makeAnonymousReference(signs);
     }
 
-DirectiveArgumentText
-  = raw:$((DirectiveString / (!Comment !Newline .))*) {
-      return raw.trim();
+ArgumentList
+  = head:Argument tail:(_ "," _ Argument)* {
+      return makeArgumentList(head, tail);
     }
 
-DirectiveString
-  = '"' ('\\' . / !'"' .)* '"'
+Argument
+  = IntrinsicCall
+  / StringLiteral
+  / SizeLiteral
+  / NumberLiteral
+  / SymbolReference
+
+IntrinsicCall
+  = namespace:Identifier ":" name:Identifier _ "(" _ args:ArgumentList? _ ")" {
+      return makeIntrinsicCall(namespace, name, args);
+    }
+
+StringLiteral
+  = raw:$('"' ('\\' . / !'"' .)* '"') { return makeStringArgument(raw); }
+
+SizeLiteral
+  = raw:$([0-9]+ [kK]) { return makeSize(raw); }
+
+SymbolReference
+  = name:Identifier { return makeSymbol(name); }
+
+RAM = ".ram"i { return makeString(); }
+END = ".end"i { return makeString(); }
+DB = ".db"i { return makeString(); }
+DW = ".dw"i { return makeString(); }
+BYTES = ".bytes"i { return makeString(); }
+NESPRG = ".nesprg"i { return makeString(); }
+NESCHR = ".neschr"i { return makeString(); }
+NESPRGRAM = ".nesprgram"i { return makeString(); }
+NESMAPPER = ".nesmapper"i { return makeString(); }
+NESMIRRORING = ".nesmirroring"i { return makeString(); }
+BANK = ".bank"i { return makeString(); }
+INCCHR = ".incchr"i { return makeString(); }
+INCLUDE = ".include"i { return makeString(); }
+USE = ".use"i { return makeString(); }
+TEXT = ".text"i { return makeString(); }
+ASCII = ".ascii"i { return makeString(); }
+NMI = ".nmi"i { return makeString(); }
+RESET = ".reset"i { return makeString(); }
+IRQ = ".irq"i { return makeString(); }
+AT = "at"i { return makeString(); }
+A = "A"i { return makeString(); }
+X = "X"i { return makeString(); }
+Y = "Y"i { return makeString(); }
+TBL = "tbl"i { return makeString(); }
+AS = "as"i { return makeString(); }
 
 Identifier
   = first:[A-Za-z_] rest:[A-Za-z0-9_.]* {
