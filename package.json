@@ -11,13 +11,13 @@
     "nesasm",
     "cc65"
   ],
-  "homepage": "https://github.com/BillyWM/bwmasm-private#readme",
+  "homepage": "https://github.com/BillyWM/bwmasm#readme",
   "bugs": {
-    "url": "https://github.com/BillyWM/bwmasm-private/issues"
+    "url": "https://github.com/BillyWM/bwmasm/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BillyWM/bwmasm-private.git"
+    "url": "git+https://github.com/BillyWM/bwmasm.git"
   },
   "license": "AGPL-3.0-or-later",
   "author": "William Wenge-Murphy",
