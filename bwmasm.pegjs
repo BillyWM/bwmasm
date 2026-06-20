@@ -4,11 +4,16 @@
   }
 
   function makeNumber(raw, base) {
-    return { type: 'number', raw, base, value: parseInt(raw.slice(base === 16 ? 1 : base === 2 ? 1 : 0).replace(/_/g, ''), base) };
+    const digits = raw.replace(/^#?[$%]?/, '').replace(/_/g, '');
+    return { type: 'number', raw, base, value: parseInt(digits, base) };
   }
 
   function makeBuiltinConstant(name, value) {
     return { type: 'builtinConstant', raw: name, name, value };
+  }
+
+  function makeImmediateLiteral(value) {
+    return { type: 'immediateLiteral', raw: value.raw, value };
   }
 
   function makeSize(raw) {
@@ -25,6 +30,30 @@
 
   function makeDirective(name, args) {
     return { type: 'directive', name, normalized: name, args };
+  }
+
+  function makeConstantValue(valueType, literal) {
+    return { type: 'constantValue', valueType, raw: literal.raw, base: literal.base, value: literal.value };
+  }
+
+  function makeConstantDefinition(name, value) {
+    return { type: 'constantDefinition', name, value };
+  }
+
+  function makeResourceDeclaration(resourceType, file, name) {
+    return { type: 'resourceDeclaration', resourceType, file, name };
+  }
+
+  function makeUseResource(resource) {
+    return { type: 'useResource', resource };
+  }
+
+  function makeMapperKeyword(name, value) {
+    return { type: 'mapperKeyword', raw: name, name, value };
+  }
+
+  function makeMirroringKeyword(name, value, fourScreen) {
+    return { type: 'mirroringKeyword', raw: name, name, value, fourScreen };
   }
 
   function makeProgram(lines) {
@@ -99,6 +128,26 @@
     return [head, ...tail.map((entry) => entry[3])];
   }
 
+  function makeBankNumber(number) {
+    return { type: 'bankNumber', raw: number.raw, value: number.value };
+  }
+
+  function makeBankKeyword(name) {
+    return { type: 'bankKeyword', raw: name, name: name.toLowerCase() };
+  }
+
+  function makeBankConstantReference(reference) {
+    return { type: 'bankConstantReference', raw: reference.raw, name: reference.name };
+  }
+
+  function makeBankRange(start, end) {
+    return { type: 'bankRange', raw: `${start.raw}-${end.raw}`, start, end };
+  }
+
+  function makeBankSelection(head, tail) {
+    return { type: 'bankSelection', selectors: [head, ...tail.map((entry) => entry[3])] };
+  }
+
   function makeIntrinsicCall(namespace, name, args) {
     return { type: 'intrinsicCall', namespace, name, args: args || [] };
   }
@@ -157,9 +206,28 @@ SizeDecl
     }
 
 NumberLiteral
+  = HexNumberLiteral
+  / DecimalNumberLiteral
+
+HexNumberLiteral
   = raw:$("$" [0-9a-fA-F]+) { return makeNumber(raw, 16); }
-  / raw:$("%" [01_]+) { return makeNumber(raw, 2); }
-  / raw:$([0-9]+) { return makeNumber(raw, 10); }
+
+DecimalNumberLiteral
+  = raw:$([0-9]+) { return makeNumber(raw, 10); }
+
+ImmediateScalarLiteral
+  = raw:$("#$" [0-9a-fA-F]+) { return makeNumber(raw, 16); }
+  / raw:$("#%" [01_]+) { return makeNumber(raw, 2); }
+
+ConstantValue
+  = literal:ImmediateScalarLiteral { return makeConstantValue('scalar', literal); }
+  / literal:DecimalNumberLiteral { return makeConstantValue('scalar', literal); }
+  / literal:HexNumberLiteral { return makeConstantValue('address', literal); }
+
+ConstantDefinition
+  = name:Identifier _ "=" _ value:ConstantValue {
+      return makeConstantDefinition(name, value);
+    }
 
 Line
   = _ Newline {
@@ -167,6 +235,9 @@ Line
     }
   / _ comment:Comment Newline? {
       return makeComment(comment);
+    }
+  / _ constant:ConstantDefinition _ Comment? Newline? {
+      return makeLine(null, constant);
     }
   / _ label:Label _ statement:Statement? _ Comment? Newline? {
       return makeLine(label, statement);
@@ -211,17 +282,17 @@ Directive
   = NESPRG ___ args:ArgumentList { return makeDirective('nesprg', args); }
   / NESCHR ___ args:ArgumentList { return makeDirective('neschr', args); }
   / NESPRGRAM ___ args:ArgumentList { return makeDirective('nesprgram', args); }
-  / NESMAPPER ___ args:ArgumentList { return makeDirective('nesmapper', args); }
-  / NESMIRRORING ___ args:ArgumentList { return makeDirective('nesmirroring', args); }
-  / BANK ___ args:ArgumentList { return makeDirective('bank', args); }
+  / NESMAPPER ___ mapper:MapperSpec { return makeDirective('nesmapper', [mapper]); }
+  / NESMIRRORING ___ mirroring:MirroringKeyword { return makeDirective('nesmirroring', [mirroring]); }
+  / BANK ___ selection:BankSelection { return makeDirective('bank', [selection]); }
   / INCCHR ___ args:ArgumentList { return makeDirective('incchr', args); }
   / NMI ___ args:ArgumentList { return makeDirective('nmi', args); }
   / RESET ___ args:ArgumentList { return makeDirective('reset', args); }
   / IRQ ___ args:ArgumentList { return makeDirective('irq', args); }
   / INCLUDE ___ TBL ___ file:StringLiteral ___ AS ___ name:Identifier {
-      return makeDirective('includeTable', { file, name });
+      return makeResourceDeclaration('table', file, name);
     }
-  / USE ___ name:Identifier { return makeDirective('useTable', { name }); }
+  / USE ___ resource:SymbolicReference { return makeUseResource(resource); }
 
 Instruction
   = mnemonic:ImpliedMnemonic {
@@ -233,7 +304,7 @@ Instruction
   / mnemonic:ImmediateMnemonic ___ operand:ImmediateOperand {
       return makeInstruction(mnemonic, operand);
     }
-  / mnemonic:RelativeMnemonic ___ operand:DirectOperand {
+  / mnemonic:RelativeMnemonic ___ operand:RelativeOperand {
       return makeInstruction(mnemonic, operand);
     }
   / mnemonic:IndirectMnemonic ___ operand:IndirectOperand {
@@ -336,21 +407,27 @@ DirectMnemonic
 AccumulatorOperand
   = A { return makeOperand('acc', null); }
 ImmediateOperand
-  = "#" _ parameter:Parameter { return makeOperand('imm', parameter); }
+  = literal:ImmediateLiteral { return makeOperand('imm', literal); }
 DirectOperand
-  = parameter:Parameter { return makeOperand('direct', parameter); }
+  = parameter:AddressOperand { return makeOperand('direct', parameter); }
 DirectXOperand
-  = parameter:Parameter _ "," _ X { return makeOperand('directX', parameter); }
+  = parameter:AddressOperand _ "," _ X { return makeOperand('directX', parameter); }
 DirectYOperand
-  = parameter:Parameter _ "," _ Y { return makeOperand('directY', parameter); }
+  = parameter:AddressOperand _ "," _ Y { return makeOperand('directY', parameter); }
 IndirectOperand
-  = "(" _ parameter:Parameter _ ")" { return makeOperand('ind', parameter); }
+  = "(" _ parameter:AddressOperand _ ")" { return makeOperand('ind', parameter); }
 IndexedIndirectXOperand
-  = "(" _ parameter:Parameter _ "," _ X _ ")" { return makeOperand('indx', parameter); }
+  = "(" _ parameter:AddressOperand _ "," _ X _ ")" { return makeOperand('indx', parameter); }
 IndirectIndexedYOperand
-  = "(" _ parameter:Parameter _ ")" _ "," _ Y { return makeOperand('indy', parameter); }
+  = "(" _ parameter:AddressOperand _ ")" _ "," _ Y { return makeOperand('indy', parameter); }
 
-Parameter
+ImmediateLiteral
+  = value:ImmediateScalarLiteral { return makeImmediateLiteral(value); }
+
+RelativeOperand
+  = parameter:AddressOperand { return makeOperand('rel', parameter); }
+
+AddressOperand
   = AddressLiteral
   / reference:AnonymousReference { return reference; }
   / SymbolReference
@@ -363,6 +440,29 @@ AnonymousReference
   = signs:[+-]+ {
       return makeAnonymousReference(signs);
     }
+
+BankSelection
+  = head:BankSelector tail:(_ "," _ BankSelector)* {
+      return makeBankSelection(head, tail);
+    }
+
+BankSelector
+  = BankAll
+  / BankRange
+  / BankEndpoint
+
+BankRange
+  = start:BankEndpoint _ "-" _ end:BankEndpoint {
+      return makeBankRange(start, end);
+    }
+
+BankEndpoint
+  = number:DecimalNumberLiteral { return makeBankNumber(number); }
+  / name:(FIRST / LAST) { return makeBankKeyword(name); }
+  / reference:SymbolReference { return makeBankConstantReference(reference); }
+
+BankAll
+  = name:ALL { return makeBankKeyword(name); }
 
 ArgumentList
   = head:Argument tail:(_ "," _ Argument)* {
@@ -390,6 +490,25 @@ SizeLiteral
 
 SymbolReference
   = name:Identifier { return makeSymbol(name); }
+
+SymbolicReference
+  = BuiltinConstant
+  / SymbolReference
+
+MapperSpec
+  = MapperKeyword
+  / NumberLiteral
+
+MapperKeyword
+  = name:NROM { return makeMapperKeyword(name, 0); }
+  / name:AXROM { return makeMapperKeyword(name, 7); }
+  / name:BNROM { return makeMapperKeyword(name, 34); }
+
+MirroringKeyword
+  = name:HORIZONTAL { return makeMirroringKeyword(name, 'horizontal', false); }
+  / name:VERTICAL { return makeMirroringKeyword(name, 'vertical', false); }
+  / name:FOUR_SCREEN { return makeMirroringKeyword(name, 'horizontal', true); }
+  / name:FOURSCREEN { return makeMirroringKeyword(name, 'horizontal', true); }
 
 BuiltinConstant
   = name:PPUCTRL { return makeBuiltinConstant(name, 0x2000); }
@@ -466,6 +585,16 @@ X = "X"i { return makeString(); }
 Y = "Y"i { return makeString(); }
 TBL = "tbl"i { return makeString(); }
 AS = "as"i { return makeString(); }
+FIRST = "first"i ![A-Za-z0-9_.] { return makeString(); }
+LAST = "last"i ![A-Za-z0-9_.] { return makeString(); }
+ALL = "all"i ![A-Za-z0-9_.] { return makeString(); }
+NROM = "nrom"i ![A-Za-z0-9_.] { return makeString(); }
+AXROM = "axrom"i ![A-Za-z0-9_.] { return makeString(); }
+BNROM = "bnrom"i ![A-Za-z0-9_.] { return makeString(); }
+HORIZONTAL = "horizontal"i ![A-Za-z0-9_.] { return makeString(); }
+VERTICAL = "vertical"i ![A-Za-z0-9_.] { return makeString(); }
+FOUR_SCREEN = "four_screen"i ![A-Za-z0-9_.] { return makeString(); }
+FOURSCREEN = "fourscreen"i ![A-Za-z0-9_.] { return makeString(); }
 PPUCTRL = "PPUCTRL"i ![A-Za-z0-9_.] { return makeString(); }
 PPUMASK = "PPUMASK"i ![A-Za-z0-9_.] { return makeString(); }
 PPUSTATUS = "PPUSTATUS"i ![A-Za-z0-9_.] { return makeString(); }
@@ -521,7 +650,7 @@ Identifier
     }
 
 Comment
-  = ";" (!Newline .)*
+  = ";" text:$((!Newline .)*) { return text; }
 
 _ "optional whitespace"
   = [ \t]*

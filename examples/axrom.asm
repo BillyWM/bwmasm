@@ -1,33 +1,35 @@
-; bwmasm text test ROM.
+; bwmasm test ROM
+; Tests AxROM, creating a trampline with the .bank directive
 
-.nesprg 32k
+.nesprg 256k
 .neschr 8k
-.nesmapper nrom
+.nesmapper axrom
 .nesmirroring vertical
 .incchr "horrible-night.chr"
 .include tbl "example.tbl" as MainTable
-.use MainTable
 
 .ram
   .db framesLo
   .db framesHi
 .end
 
-.bank 0
-
-.nmi Nmi
-.reset Reset
+.bank all
+.reset Trampoline
 .irq Irq
 
+.bank 0
+.nmi Nmi
+
+.bank 1-last
+.nmi Irq
+
+.bank 0
 Nmi:
   inc framesLo
   bne +
   inc framesHi
 +:
   jsr DrawCounter
-  rti
-
-Irq:
   rti
 
 Reset:
@@ -37,20 +39,20 @@ Reset:
   txs
 
   lda #$00
-  sta $2000
-  sta $2001
+  sta PPUCTRL
+  sta PPUMASK
   sta framesLo
   sta framesHi
 
 -:
-  bit $2002
+  bit PPUSTATUS
   bpl -
 
-  bit $2002
+  bit PPUSTATUS
   lda #$20
-  sta $2006
+  sta PPUADDR
   lda #$00
-  sta $2006
+  sta PPUADDR
   lda #$00
   ldx #$00
 
@@ -59,38 +61,38 @@ Reset:
   ldx #$00
 
 ClearName:
-  sta $2007
+  sta PPUDATA
   inx
   bne ClearName
   dey
   bne ClearName
 
-  bit $2002
+  bit PPUSTATUS
   lda #$3f
-  sta $2006
+  sta PPUADDR
   lda #$00
-  sta $2006
+  sta PPUADDR
   lda #$0f
-  sta $2007
+  sta PPUDATA
   lda #$30
-  sta $2007
+  sta PPUDATA
   lda #$10
-  sta $2007
+  sta PPUDATA
   lda #$00
-  sta $2007
+  sta PPUDATA
 
-  bit $2002
+  bit PPUSTATUS
   lda #$20
-  sta $2006
+  sta PPUADDR
   lda #$48
-  sta $2006
+  sta PPUADDR
   ldx #$00
 
 DrawTitle:
   lda TitleText,x
   cmp #$ff
   beq TitleDone
-  sta $2007
+  sta PPUDATA
   inx
   jmp DrawTitle
 
@@ -98,19 +100,19 @@ TitleDone:
   jsr DrawCounter
 
   lda #%10000000
-  sta $2000
+  sta PPUCTRL
   lda #%00011110
-  sta $2001
+  sta PPUMASK
 
 MainLoop:
   jmp MainLoop
 
 DrawCounter:
-  bit $2002
+  bit PPUSTATUS
   lda #$20
-  sta $2006
+  sta PPUADDR
   lda #$8e
-  sta $2006
+  sta PPUADDR
 
   lda framesHi
   lsr A
@@ -134,8 +136,8 @@ DrawCounter:
   and #$0f
   jsr WriteHexDigit
   lda #$00
-  sta $2005
-  sta $2005
+  sta PPUSCROLL
+  sta PPUSCROLL
   rts
 
 WriteHexDigit:
@@ -143,14 +145,29 @@ WriteHexDigit:
   bpl HexLetter
   clc
   adc #$35
-  sta $2007
+  sta PPUDATA
   rts
   
 HexLetter:
   clc
   adc #$f7
-  sta $2007
+  sta PPUDATA
   rts
 
 TitleText:
+  .use MainTable
   .text "BWMASM Test ROM"
+
+.bank all
+Irq:
+  rti
+
+Trampoline:
+  lda #$00
+  sta $ffff
+
+.bank 1-last
+  jmp Trampoline
+
+.bank 0
+  jmp Reset
