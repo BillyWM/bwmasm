@@ -159,6 +159,7 @@ TitleText:
   .text "BWMASM Test ROM"
 
 .bank all
+.bankalign all
 Irq:
   rti
 

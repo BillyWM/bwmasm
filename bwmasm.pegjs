@@ -284,6 +284,7 @@ Directive
   / NESPRGRAM ___ args:ArgumentList { return makeDirective('nesprgram', args); }
   / NESMAPPER ___ mapper:MapperSpec { return makeDirective('nesmapper', [mapper]); }
   / NESMIRRORING ___ mirroring:MirroringKeyword { return makeDirective('nesmirroring', [mirroring]); }
+  / BANKALIGN ___ selection:BankSelection { return makeDirective('bankalign', [selection]); }
   / BANK ___ selection:BankSelection { return makeDirective('bank', [selection]); }
   / INCCHR ___ args:ArgumentList { return makeDirective('incchr', args); }
   / NMI ___ args:ArgumentList { return makeDirective('nmi', args); }
@@ -570,6 +571,7 @@ NESCHR = ".neschr"i { return makeString(); }
 NESPRGRAM = ".nesprgram"i { return makeString(); }
 NESMAPPER = ".nesmapper"i { return makeString(); }
 NESMIRRORING = ".nesmirroring"i { return makeString(); }
+BANKALIGN = ".bankalign"i { return makeString(); }
 BANK = ".bank"i { return makeString(); }
 INCCHR = ".incchr"i { return makeString(); }
 INCLUDE = ".include"i { return makeString(); }
