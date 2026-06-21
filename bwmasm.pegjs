@@ -161,6 +161,28 @@
     return { type: 'bankRange', raw: `${start.raw}-${end.raw}`, start, end };
   }
 
+  function makeBankSelector(base, unitSize, window) {
+    return {
+      type: 'bankSelector',
+      raw: [base.raw, unitSize ? `x ${unitSize.raw}` : null, window ? `at ${window.raw}` : null].filter(Boolean).join(' '),
+      base,
+      unitSize: unitSize || null,
+      window: window || null,
+    };
+  }
+
+  function makeBankWindowAlias(name, raw) {
+    return { type: 'bankWindow', kind: 'alias', raw, name, value: name === 'low' ? 0x8000 : name === 'mid' ? 0xA000 : 0xC000 };
+  }
+
+  function makeBankWindowAddress(address) {
+    return { type: 'bankWindow', kind: 'address', raw: address.raw, address, value: address.value };
+  }
+
+  function makeModeKeyword(name) {
+    return { type: 'modeKeyword', raw: name, name: name.toLowerCase() };
+  }
+
   function makeBankSelection(head, tail) {
     return { type: 'bankSelection', selectors: [head, ...tail.map((entry) => entry[3])] };
   }
@@ -334,7 +356,8 @@ RomDecl
     }
 
 Directive
-  = BANKALIGN ___ selection:BankSelection { return makeDirective('bankalign', [selection]); }
+  = MODE ___ mode:ModeKeyword { return makeDirective('mode', [mode]); }
+  / BANKALIGN ___ selection:BankSelection { return makeDirective('bankalign', [selection]); }
   / BANK ___ selection:BankSelection { return makeDirective('bank', [selection]); }
   / NMI ___ args:ArgumentList { return makeDirective('nmi', args); }
   / RESET ___ args:ArgumentList { return makeDirective('reset', args); }
@@ -498,9 +521,26 @@ BankSelection
     }
 
 BankSelector
+  = base:BankSelectorBase unit:BankUnitQualifier? window:BankWindowQualifier? {
+      return makeBankSelector(base, unit, window);
+    }
+
+BankSelectorBase
   = BankAll
   / BankRange
   / BankEndpoint
+
+BankUnitQualifier
+  = ___ X ___ size:SizeLiteral { return size; }
+
+BankWindowQualifier
+  = ___ AT ___ window:BankWindow { return window; }
+
+BankWindow
+  = low:LOW ___ window:WINDOW { return makeBankWindowAlias('low', `${low} ${window}`); }
+  / mid:MID ___ window:WINDOW { return makeBankWindowAlias('mid', `${mid} ${window}`); }
+  / high:HIGH ___ window:WINDOW { return makeBankWindowAlias('high', `${high} ${window}`); }
+  / address:AddressLiteral { return makeBankWindowAddress(address); }
 
 BankRange
   = start:BankEndpoint _ "-" _ end:BankEndpoint {
@@ -509,11 +549,14 @@ BankRange
 
 BankEndpoint
   = number:DecimalNumberLiteral { return makeBankNumber(number); }
-  / name:(FIRST / LAST) { return makeBankKeyword(name); }
+  / name:(SECOND_LAST / FIRST / LAST) { return makeBankKeyword(name); }
   / reference:SymbolReference { return makeBankConstantReference(reference); }
 
 BankAll
   = name:ALL { return makeBankKeyword(name); }
+
+ModeKeyword
+  = name:(SWAP_LOW / SWAP_HIGH) { return makeModeKeyword(name); }
 
 ArgumentList
   = head:Argument tail:(_ "," _ Argument)* {
@@ -552,6 +595,9 @@ MapperSpec
 
 MapperKeyword
   = name:NROM { return makeMapperKeyword(name, 0); }
+  / name:UNROM512 { return makeMapperKeyword(name, 30); }
+  / name:UNROM { return makeMapperKeyword(name, 2); }
+  / name:MMC3 { return makeMapperKeyword(name, 4); }
   / name:AXROM { return makeMapperKeyword(name, 7); }
   / name:BNROM { return makeMapperKeyword(name, 34); }
 
@@ -617,6 +663,7 @@ END = ".end"i { return makeString(); }
 DB = ".db"i { return makeString(); }
 DW = ".dw"i { return makeString(); }
 BYTES = ".bytes"i { return makeString(); }
+MODE = ".mode"i { return makeString(); }
 BANKALIGN = ".bankalign"i { return makeString(); }
 BANK = ".bank"i { return makeString(); }
 INCLUDE = ".include"i { return makeString(); }
@@ -627,6 +674,12 @@ NMI = ".nmi"i { return makeString(); }
 RESET = ".reset"i { return makeString(); }
 IRQ = ".irq"i { return makeString(); }
 AT = "at"i { return makeString(); }
+LOW = "low"i ![A-Za-z0-9_.] { return makeString(); }
+MID = "mid"i ![A-Za-z0-9_.] { return makeString(); }
+HIGH = "high"i ![A-Za-z0-9_.] { return makeString(); }
+WINDOW = "window"i ![A-Za-z0-9_.] { return makeString(); }
+SWAP_LOW = "swap-low"i ![A-Za-z0-9_.] { return makeString(); }
+SWAP_HIGH = "swap-high"i ![A-Za-z0-9_.] { return makeString(); }
 A = "A"i { return makeString(); }
 X = "X"i { return makeString(); }
 Y = "Y"i { return makeString(); }
@@ -637,10 +690,14 @@ MAPPER = "mapper"i ![A-Za-z0-9_.] { return makeString(); }
 MIRRORING = "mirroring"i ![A-Za-z0-9_.] { return makeString(); }
 TBL = "tbl"i ![A-Za-z0-9_.] { return makeString(); }
 AS = "as"i ![A-Za-z0-9_.] { return makeString(); }
+SECOND_LAST = "second-last"i ![A-Za-z0-9_.] { return makeString(); }
 FIRST = "first"i ![A-Za-z0-9_.] { return makeString(); }
 LAST = "last"i ![A-Za-z0-9_.] { return makeString(); }
 ALL = "all"i ![A-Za-z0-9_.] { return makeString(); }
 NROM = "nrom"i ![A-Za-z0-9_.] { return makeString(); }
+UNROM512 = "unrom512"i ![A-Za-z0-9_.] { return makeString(); }
+UNROM = "unrom"i ![A-Za-z0-9_.] { return makeString(); }
+MMC3 = "mmc3"i ![A-Za-z0-9_.] { return makeString(); }
 AXROM = "axrom"i ![A-Za-z0-9_.] { return makeString(); }
 BNROM = "bnrom"i ![A-Za-z0-9_.] { return makeString(); }
 HORIZONTAL = "horizontal"i ![A-Za-z0-9_.] { return makeString(); }
