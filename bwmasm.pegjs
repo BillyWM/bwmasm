@@ -119,6 +119,23 @@
     });
   }
 
+  function makeCartridgeBlock(items, end) {
+    return {
+      type: 'block',
+      kind: 'cartridge',
+      items: items.filter(Boolean),
+      end,
+    };
+  }
+
+  function makeCartridgeDeclaration(name, args) {
+    return { type: 'cartridgeDeclaration', name: name.toLowerCase(), args };
+  }
+
+  function makeChrInclude(args) {
+    return { type: 'includeDeclaration', includeType: 'chr', normalized: 'include chr', args };
+  }
+
   function makeAnonymousReference(signs) {
     const name = join(signs);
     return { type: 'anonymousReference', name, raw: name };
@@ -154,8 +171,46 @@
 }
 
 Program
-  = lines:(RamBlock / Line)* _ EndOfInput {
+  = lines:(CartridgeBlock / RamBlock / Line)* _ EndOfInput {
       return makeProgram(lines);
+    }
+
+CartridgeBlock
+  = _ CARTRIDGE _ Comment? Newline items:CartridgeItemLine* end:CartridgeEnd {
+      return makeCartridgeBlock(items, end);
+    }
+
+CartridgeEnd
+  = _ END _ Comment? Newline? {
+      return { type: 'blockEnd', kind: 'cartridge' };
+    }
+
+CartridgeItemLine
+  = _ Newline {
+      return null;
+    }
+  / _ comment:Comment Newline? {
+      return makeComment(comment);
+    }
+  / _ item:CartridgeDecl _ Comment? Newline? {
+      return item;
+    }
+
+CartridgeDecl
+  = PRG ___ size:SizeLiteral {
+      return makeCartridgeDeclaration('prg', [size]);
+    }
+  / CHR ___ size:SizeLiteral {
+      return makeCartridgeDeclaration('chr', [size]);
+    }
+  / PRGRAM ___ size:SizeLiteral {
+      return makeCartridgeDeclaration('prgram', [size]);
+    }
+  / MAPPER ___ mapper:MapperSpec {
+      return makeCartridgeDeclaration('mapper', [mapper]);
+    }
+  / MIRRORING ___ mirroring:MirroringKeyword {
+      return makeCartridgeDeclaration('mirroring', [mirroring]);
     }
 
 RamBlock
@@ -279,17 +334,12 @@ RomDecl
     }
 
 Directive
-  = NESPRG ___ args:ArgumentList { return makeDirective('nesprg', args); }
-  / NESCHR ___ args:ArgumentList { return makeDirective('neschr', args); }
-  / NESPRGRAM ___ args:ArgumentList { return makeDirective('nesprgram', args); }
-  / NESMAPPER ___ mapper:MapperSpec { return makeDirective('nesmapper', [mapper]); }
-  / NESMIRRORING ___ mirroring:MirroringKeyword { return makeDirective('nesmirroring', [mirroring]); }
-  / BANKALIGN ___ selection:BankSelection { return makeDirective('bankalign', [selection]); }
+  = BANKALIGN ___ selection:BankSelection { return makeDirective('bankalign', [selection]); }
   / BANK ___ selection:BankSelection { return makeDirective('bank', [selection]); }
-  / INCCHR ___ args:ArgumentList { return makeDirective('incchr', args); }
   / NMI ___ args:ArgumentList { return makeDirective('nmi', args); }
   / RESET ___ args:ArgumentList { return makeDirective('reset', args); }
   / IRQ ___ args:ArgumentList { return makeDirective('irq', args); }
+  / INCLUDE ___ CHR ___ args:ArgumentList { return makeChrInclude(args); }
   / INCLUDE ___ TBL ___ file:StringLiteral ___ AS ___ name:Identifier {
       return makeResourceDeclaration('table', file, name);
     }
@@ -562,18 +612,13 @@ BuiltinConstant
   / name:GXROM_BANK { return makeBuiltinConstant(name, 0xFFFF); }
 
 RAM = ".ram"i { return makeString(); }
+CARTRIDGE = ".cartridge"i { return makeString(); }
 END = ".end"i { return makeString(); }
 DB = ".db"i { return makeString(); }
 DW = ".dw"i { return makeString(); }
 BYTES = ".bytes"i { return makeString(); }
-NESPRG = ".nesprg"i { return makeString(); }
-NESCHR = ".neschr"i { return makeString(); }
-NESPRGRAM = ".nesprgram"i { return makeString(); }
-NESMAPPER = ".nesmapper"i { return makeString(); }
-NESMIRRORING = ".nesmirroring"i { return makeString(); }
 BANKALIGN = ".bankalign"i { return makeString(); }
 BANK = ".bank"i { return makeString(); }
-INCCHR = ".incchr"i { return makeString(); }
 INCLUDE = ".include"i { return makeString(); }
 USE = ".use"i { return makeString(); }
 TEXT = ".text"i { return makeString(); }
@@ -585,8 +630,13 @@ AT = "at"i { return makeString(); }
 A = "A"i { return makeString(); }
 X = "X"i { return makeString(); }
 Y = "Y"i { return makeString(); }
-TBL = "tbl"i { return makeString(); }
-AS = "as"i { return makeString(); }
+PRG = "prg"i ![A-Za-z0-9_.] { return makeString(); }
+CHR = "chr"i ![A-Za-z0-9_.] { return makeString(); }
+PRGRAM = "prgram"i ![A-Za-z0-9_.] { return makeString(); }
+MAPPER = "mapper"i ![A-Za-z0-9_.] { return makeString(); }
+MIRRORING = "mirroring"i ![A-Za-z0-9_.] { return makeString(); }
+TBL = "tbl"i ![A-Za-z0-9_.] { return makeString(); }
+AS = "as"i ![A-Za-z0-9_.] { return makeString(); }
 FIRST = "first"i ![A-Za-z0-9_.] { return makeString(); }
 LAST = "last"i ![A-Za-z0-9_.] { return makeString(); }
 ALL = "all"i ![A-Za-z0-9_.] { return makeString(); }

@@ -1,10 +1,13 @@
 ; bwmasm text test ROM.
 
-.nesprg 32k
-.neschr 8k
-.nesmapper nrom
-.nesmirroring vertical
-.incchr "horrible-night.chr"
+.cartridge
+  prg 32k
+  chr 8k
+  mapper nrom
+  mirroring vertical
+.end
+
+.include chr "horrible-night.chr"
 .include tbl "example.tbl" as MainTable
 
 .ram

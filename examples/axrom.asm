@@ -1,11 +1,14 @@
 ; bwmasm test ROM
 ; Tests AxROM, creating a trampline with the .bank directive
 
-.nesprg 256k
-.neschr 8k
-.nesmapper axrom
-.nesmirroring vertical
-.incchr "horrible-night.chr"
+.cartridge
+  prg 256k
+  chr 8k
+  mapper axrom
+  mirroring vertical
+.end
+
+.include chr "horrible-night.chr"
 .include tbl "example.tbl" as MainTable
 
 .ram
@@ -162,6 +165,11 @@ TitleText:
 .bankalign all
 Irq:
   rti
+
+; bwm:resetTrampoline(bank=0, target=Reset)
+
+; .template bwm:resetTrampoline(bank=0, reset=Reset)
+; .end
 
 Trampoline:
   lda #$00
