@@ -2,13 +2,13 @@
 
 An NES assembler
 
-Intended to to be integrated as a library into other NES projects, as well as runnable standalone.
+Intended to be integrated as a library into other NES projects as well as runnable standalone.
 
 Other popular NES assemblers have parsing bugs. One goal of bwmasm is to document their grammars formally and support compatibility with their syntax (as it actually is, not as intended). 
 
 Also supports its own unique bwmasm syntax.
 
-Future versions will switch to 4 different parsers: bwmasm syntax, asm6f, ca65, and nesasm (with more obscure ones to possibly be added later) and provide automatic conversion between formats
+Future versions will switch to 4 different parsers: bwmasm syntax, asm6f, ca65, and nesasm (with more obscure ones to possibly be added later) and also provide automatic conversion between formats
 
 ## Features
 
@@ -21,10 +21,10 @@ Supports multiple TBL files - just switch encodings with `.use`
 ```
 .include tbl "example.tbl" as MainTable
 .use MainTable
-.text "This text uses example.tbl where space is $00 'a' is $01 etc"
+.text "This text uses example.tbl where space is $00 'A' is $01 etc"
 ```
 
-### Simplifed headers
+### Simplified headers
 	
 Uses a human-readable format instead of forcing you to manually write magic numbers that please the iNES header format
 
@@ -52,7 +52,7 @@ Example:
 	...etc...
 ```
 
-If your mapper supports multiple modies (like MMC1) you can specify e.g:
+If your mapper supports multiple modes (like MMC1) you can specify, e.g:
 
 ```.bank 1 x 16```
 
